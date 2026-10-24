@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Build MSI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  msi:
+    runs-on: windows-latest
+    env:
+      VLC_VERSION: 3.0.24
+    steps:
+      - uses: actions/checkout@v4
+
+      # Refuse un gradle-wrapper.jar modifié
+      - uses: gradle/actions/wrapper-validation@v4
+
+      # JDK 21, comme jvmToolchain(21) dans desktopApp/build.gradle.kts
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # VLC portable embarqué dans le MSI, vérifié contre l'empreinte publiée par VideoLAN
+      - name: Télécharger VLC
+        shell: pwsh
+        run: |
+          $base = "https://download.videolan.org/pub/videolan/vlc/$env:VLC_VERSION/win64"
+          $zip = "vlc-$env:VLC_VERSION-win64.zip"
+          Invoke-WebRequest "$base/$zip" -OutFile $zip
+          Invoke-WebRequest "$base/$zip.sha256" -OutFile "$zip.sha256"
+          $expected = ((Get-Content "$zip.sha256" -Raw) -split '\s+')[0]
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash
+          if ($actual -ne $expected) { throw "Empreinte VLC invalide : $actual" }
+          Expand-Archive $zip -DestinationPath _tools
+
+      # WiX 3.11 est téléchargé par le plugin Compose (build/wix311) : rien à préinstaller
+      - name: Construire le MSI
+        run: ./gradlew.bat :desktopApp:packageMsi "-PvlcDir=_tools/vlc-${{ env.VLC_VERSION }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NewPipe-Windows-msi
+          path: desktopApp/build/compose/binaries/main/msi/*.msi

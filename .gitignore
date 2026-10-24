@@ -1,0 +1,11 @@
+.gradle/
+.kotlin/
+**/build/
+.idea/
+*.iml
+local.properties
+
+# Outils portables et sources de référence (non versionnés)
+_tools/
+_upstream/
+_ref/
