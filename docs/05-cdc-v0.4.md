@@ -10,10 +10,11 @@ Base : v0.3 (commit `dbf775f`, 24/10/2026). Constats issus des premiers essais d
 | E2 | Téléchargement des vidéos en MP4 (YouTube) | Fonction manquante | Haute | 0,5 à 1 j |
 | E3 | Plein écran sans bande en haut | Correction | Haute | 0,5 j |
 | E4 | Playlists locales | Nouvelle fonction | Moyenne | 2 à 3 j |
-| | **Total** | | | **3,5 à 5 j** |
+| E5 | Import de playlists YouTube existantes (dépend de E4) | Nouvelle fonction | Moyenne | 2 à 2,5 j |
+| | **Total** | | | **5,5 à 7,5 j** |
 
 Hors périmètre v0.4 (voir `04-etat-beta.md` § 6) : pages chaîne et playlist en ligne,
-abonnements et historique, import Takeout et sauvegarde Android, sous-titres.
+abonnements et historique, import Takeout des abonnements et sauvegarde Android, sous-titres.
 
 ---
 
@@ -135,13 +136,64 @@ ligne, comme les playlists locales de NewPipe Android.
 - Fichier JSON corrompu : l'application démarre, signale l'erreur et conserve une copie du
   fichier.
 
+## E5 — Import de playlists YouTube existantes
+
+**Besoin.** Récupérer dans les playlists locales (E4) des playlists déjà créées sur YouTube.
+
+**Contrainte.** NewPipe fonctionne sans compte Google : l'application ne peut lire que les
+playlists accessibles sans connexion. Il faut donc deux voies d'import.
+
+### Voie A — par lien (playlists publiques ou non répertoriées)
+
+- Bouton « Importer depuis YouTube » dans l'écran Playlists. On colle l'URL de la playlist
+  (`youtube.com/playlist?list=…`) ou l'URL d'une vidéo qui contient `list=`.
+- Lecture par l'extracteur (`PlaylistInfo`), avec toutes les pages de la playlist (pagination
+  `getMoreItems`), quelle que soit sa longueur.
+- Aperçu avant import : titre, chaîne propriétaire, nombre de vidéos, vignette. Choix entre
+  créer une nouvelle playlist locale (nom proposé : celui de YouTube) et ajouter à une
+  playlist existante.
+- Import de plusieurs liens à la suite (un par ligne).
+- Option « Mettre à jour depuis YouTube » sur une playlist importée par lien : ajoute les
+  nouvelles vidéos sans toucher à l'ordre ni aux ajouts manuels. L'URL d'origine est conservée.
+
+### Voie B — par Google Takeout (playlists privées, « À regarder plus tard », vidéos aimées)
+
+- Ces listes ne sont pas lisibles sans compte. L'utilisateur exporte ses données YouTube avec
+  Google Takeout, puis sélectionne l'archive `.zip` ou le dossier extrait.
+- Détection des fichiers CSV de playlists dans l'archive, **par leur en-tête et non par leur
+  chemin** : les noms de dossiers dépendent de la langue du compte (même règle que pour les
+  abonnements, voir doc 02). Le format exact est à relever sur un export réel avant de coder.
+- Liste des playlists trouvées, avec cases à cocher pour choisir celles à importer.
+- Takeout ne fournit que les identifiants des vidéos : titres, chaînes, durées et vignettes
+  sont récupérés par l'extracteur, en tâche de fond. Les requêtes sont limitées en parallèle
+  pour éviter les blocages 429 / captcha, et une progression est affichée. La playlist est
+  utilisable avant la fin de la récupération.
+
+### Règles communes
+
+- Vidéos privées, supprimées ou indisponibles : importées avec la mention « indisponible »
+  et comptées dans le rapport d'import. Elles ne bloquent pas l'import.
+- Doublons dans une même playlist : ignorés et comptés.
+- Rapport de fin d'import : vidéos importées, indisponibles, doublons ignorés.
+- Import annulable. En cas d'annulation, ce qui est déjà importé est conservé.
+- Les playlists importées sont des playlists locales ordinaires (E4) : aucune modification
+  n'est jamais envoyée à YouTube.
+
+**Critères d'acceptation.**
+- Une playlist publique de 300 vidéos ou plus est importée en entier, dans le même ordre que
+  sur YouTube.
+- Une playlist non répertoriée est importée par son lien.
+- Un export Takeout réel (compte en français) : toutes les playlists du compte sont détectées,
+  « À regarder plus tard » comprise si Takeout la fournit.
+- Une erreur réseau ou un captcha en cours d'import n'efface rien : l'import peut être repris.
+
 ---
 
 ## Livraison et validation
 
 - Version `0.4.0` (`gradle.properties`), MSI construit par la CI.
 - Autotest étendu : téléchargement MP4 assemblé (E2) ; création, rechargement et lecture d'une
-  playlist (E4).
+  playlist (E4) ; import d'une playlist publique par lien (E5).
 - Captures `--snapshot` mises à jour, dont l'écran Playlists et le plein écran.
 - Pour E1 et E3 : validation manuelle sur le poste (souris, clavier, double écran), en plus des
   captures.
