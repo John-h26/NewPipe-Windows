@@ -60,6 +60,22 @@ object Snapshots {
         pump(12_000)
         shot("2-lecture")
 
+        // Chaîne de la vidéo en cours, ouverte comme le fait un clic sur son nom
+        state.info?.uploaderUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            graph.openChannel(url, state.info?.uploaderName)
+            pump(300)
+            while (state.channelLoading) pump(200)
+            pump(3000)
+            shot("7-chaine")
+            state.channel?.tabs?.getOrNull(1)?.let { tab ->
+                graph.selectChannelTab(tab)
+                pump(300)
+                while (state.channelLoading) pump(200)
+                pump(3000)
+                shot("8-chaine-onglet")
+            }
+        }
+
         streams.drop(1).take(3).forEach { graph.queue.enqueue(graph.queue.itemFrom(it)) }
         state.screen = Screen.QUEUE
         pump(2000)

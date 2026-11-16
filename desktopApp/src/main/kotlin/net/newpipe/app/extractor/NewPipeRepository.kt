@@ -15,6 +15,9 @@ import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.StreamingService
+import org.schabi.newpipe.extractor.channel.ChannelInfo
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabInfo
+import org.schabi.newpipe.extractor.linkhandler.ListLinkHandler
 import org.schabi.newpipe.extractor.localization.ContentCountry
 import org.schabi.newpipe.extractor.localization.Localization
 import org.schabi.newpipe.extractor.search.SearchInfo
@@ -85,4 +88,35 @@ class NewPipeRepository(
         extractor.forceContentCountry(contentCountry())
         StreamInfo.getInfo(extractor)
     }
+
+    /** En-tête d'une chaîne et liste de ses onglets (vidéos, directs, playlists…) */
+    suspend fun channel(url: String): ChannelInfo = withContext(Dispatchers.IO) {
+        val extractor = NewPipe.getServiceByUrl(url).getChannelExtractor(url)
+        extractor.forceLocalization(localization())
+        extractor.forceContentCountry(contentCountry())
+        extractor.fetchPage()
+        ChannelInfo.getInfo(extractor)
+    }
+
+    /** Première page d'un onglet de chaîne ([tab] vient de [ChannelInfo.getTabs]) */
+    suspend fun channelTab(serviceId: Int, tab: ListLinkHandler): ChannelTabInfo =
+        withContext(Dispatchers.IO) {
+            val extractor = channelTabExtractor(serviceId, tab)
+            extractor.fetchPage()
+            ChannelTabInfo.getInfo(extractor)
+        }
+
+    suspend fun moreChannelTabItems(
+        serviceId: Int,
+        tab: ListLinkHandler,
+        page: Page
+    ): ListExtractor.InfoItemsPage<InfoItem> = withContext(Dispatchers.IO) {
+        channelTabExtractor(serviceId, tab).getPage(page)
+    }
+
+    private fun channelTabExtractor(serviceId: Int, tab: ListLinkHandler) =
+        NewPipe.getService(serviceId).getChannelTabExtractor(tab).apply {
+            forceLocalization(localization())
+            forceContentCountry(contentCountry())
+        }
 }

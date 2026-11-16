@@ -29,15 +29,21 @@ import net.newpipe.app.settings.AppSettings
 import okhttp3.OkHttpClient
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.Page
+import org.schabi.newpipe.extractor.channel.ChannelInfo
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabs
 import org.schabi.newpipe.extractor.exceptions.AgeRestrictedContentException
 import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
 import org.schabi.newpipe.extractor.exceptions.GeographicRestrictionException
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.exceptions.SignInConfirmNotBotException
+import org.schabi.newpipe.extractor.linkhandler.ListLinkHandler
 import org.schabi.newpipe.extractor.stream.StreamInfo
 
 enum class Screen(val label: String) {
     SEARCH("Recherche"),
+
+    // Affiché dans le rail seulement quand une chaîne est ouverte
+    CHANNEL("Chaîne"),
     PLAYER("Lecture"),
     QUEUE("File"),
     DOWNLOADS("Téléchargements"),
@@ -66,6 +72,18 @@ class AppState {
     var streamError by mutableStateOf<String?>(null)
 
     var fullscreen by mutableStateOf(false)
+
+    /** Nom affiché pendant le chargement, avant que [channel] soit connu */
+    var channelName by mutableStateOf<String?>(null)
+    var channel by mutableStateOf<ChannelInfo?>(null)
+    var channelTab by mutableStateOf<ListLinkHandler?>(null)
+    val channelItems = mutableStateListOf<InfoItem>()
+    var channelNextPage by mutableStateOf<Page?>(null)
+    var channelLoading by mutableStateOf(false)
+    var channelError by mutableStateOf<String?>(null)
+
+    /** Écran d'où la chaîne a été ouverte, pour le bouton Retour */
+    var channelOrigin by mutableStateOf(Screen.SEARCH)
 }
 
 /**
@@ -94,6 +112,7 @@ class AppGraph private constructor() : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var searchJob: Job? = null
     private var loadJob: Job? = null
+    private var channelJob: Job? = null
 
     init {
         state.searchedServiceId = settings.serviceId
@@ -194,6 +213,97 @@ class AppGraph private constructor() : AutoCloseable {
     fun playNow(item: QueueItem) {
         queue.playNow(item)
         state.screen = Screen.PLAYER
+    }
+
+    /** Ouvre la page d'une chaîne, puis son premier onglet (les vidéos de préférence) */
+    fun openChannel(url: String, name: String? = null) {
+        if (url.isBlank()) return
+        if (state.screen != Screen.CHANNEL) state.channelOrigin = state.screen
+        state.screen = Screen.CHANNEL
+        // Même chaîne déjà chargée : on la réaffiche sans nouvelle requête
+        val loaded = state.channel
+        if (loaded != null && (loaded.url == url || loaded.originalUrl == url) && state.channelError == null) return
+        channelJob?.cancel()
+        channelJob = scope.launch {
+            state.channelLoading = true
+            state.channelError = null
+            state.channel = null
+            state.channelName = name
+            state.channelTab = null
+            state.channelItems.clear()
+            state.channelNextPage = null
+            try {
+                val info = repository.channel(url)
+                state.channel = info
+                if (info.errors.isNotEmpty()) Log.i("chaîne : ${info.errors.size} erreur(s) partielle(s)")
+                val tab = info.tabs.firstOrNull { ChannelTabs.VIDEOS in it.contentFilters }
+                    ?: info.tabs.firstOrNull()
+                if (tab != null) loadChannelTab(info, tab)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("chaîne $url", e)
+                state.channelError = describe(e)
+            } finally {
+                state.channelLoading = false
+            }
+        }
+    }
+
+    fun selectChannelTab(tab: ListLinkHandler) {
+        val info = state.channel ?: return
+        if (tab == state.channelTab && state.channelError == null) return
+        channelJob?.cancel()
+        channelJob = scope.launch {
+            state.channelLoading = true
+            state.channelError = null
+            state.channelItems.clear()
+            state.channelNextPage = null
+            try {
+                loadChannelTab(info, tab)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("onglet ${tab.contentFilters} de ${info.url}", e)
+                state.channelError = describe(e)
+            } finally {
+                state.channelLoading = false
+            }
+        }
+    }
+
+    private suspend fun loadChannelTab(info: ChannelInfo, tab: ListLinkHandler) {
+        state.channelTab = tab
+        val items = repository.channelTab(info.serviceId, tab)
+        state.channelItems.addAll(items.relatedItems)
+        state.channelNextPage = items.nextPage.takeIf { Page.isValid(it) }
+        if (items.errors.isNotEmpty()) {
+            Log.i("onglet de chaîne : ${items.errors.size} erreur(s) partielle(s)")
+            // Onglet vide à cause d'une erreur de l'extracteur : ne pas afficher « aucun contenu »
+            if (items.relatedItems.isEmpty()) throw items.errors.first().let { it as? Exception ?: Exception(it) }
+        }
+    }
+
+    fun loadMoreChannelItems() {
+        val info = state.channel ?: return
+        val tab = state.channelTab ?: return
+        val page = state.channelNextPage ?: return
+        if (state.channelLoading) return
+        channelJob = scope.launch {
+            state.channelLoading = true
+            try {
+                val more = repository.moreChannelTabItems(info.serviceId, tab, page)
+                state.channelItems.addAll(more.items)
+                state.channelNextPage = more.nextPage.takeIf { Page.isValid(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("page suivante de la chaîne", e)
+                state.channelError = describe(e)
+            } finally {
+                state.channelLoading = false
+            }
+        }
     }
 
     private fun describe(e: Exception): String = when (e) {

@@ -23,6 +23,7 @@ import net.newpipe.app.Screen
 private val Screen.symbol: String
     get() = when (this) {
         Screen.SEARCH -> "⌕"
+        Screen.CHANNEL -> "@"
         Screen.PLAYER -> "▶"
         Screen.QUEUE -> "≡"
         Screen.DOWNLOADS -> "↓"
@@ -46,7 +47,9 @@ fun App(graph: AppGraph) {
         }
         Row(Modifier.fillMaxSize()) {
             NavigationRail(Modifier.fillMaxHeight()) {
-                Screen.entries.forEach { screen ->
+                Screen.entries.filter {
+                    it != Screen.CHANNEL || state.screen == Screen.CHANNEL || state.channel != null
+                }.forEach { screen ->
                     NavigationRailItem(
                         selected = state.screen == screen,
                         onClick = { state.screen = screen },
@@ -59,6 +62,7 @@ fun App(graph: AppGraph) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (state.screen) {
                     Screen.SEARCH -> SearchScreen(graph)
+                    Screen.CHANNEL -> ChannelScreen(graph)
                     Screen.PLAYER -> PlayerScreen(graph, fullscreen = false)
                     Screen.QUEUE -> QueueScreen(graph)
                     Screen.DOWNLOADS -> DownloadsScreen(graph)

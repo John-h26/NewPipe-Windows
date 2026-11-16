@@ -44,6 +44,36 @@ object SelfTest {
         Log.i("  flux : ${info.videoOnlyStreams.size} vidéo seule, ${info.audioStreams.size} audio, " +
             "${info.videoStreams.size} muxés")
 
+        // Page de la chaîne de la vidéo : en-tête, onglets et première page de chaque onglet
+        val channelUrl = info.uploaderUrl?.takeIf { it.isNotBlank() }
+        if (channelUrl == null) {
+            Log.i("chaîne : le service ne donne pas d'URL de chaîne pour cette vidéo")
+        } else {
+            val channel = runCatching { repository.channel(channelUrl) }
+                .getOrElse { return@runBlocking fail("chaîne $channelUrl illisible : $it") }
+            channel.errors.forEach { Log.e("  erreur partielle de la chaîne", it) }
+            Log.i("chaîne : ${channel.name}, abonnés ${channel.subscriberCount}, " +
+                "onglets ${channel.tabs.map { it.contentFilters.firstOrNull() }}")
+            if (channel.tabs.isEmpty()) return@runBlocking fail("chaîne sans onglet")
+            var total = 0
+            for (tab in channel.tabs) {
+                val name = tab.contentFilters.firstOrNull()
+                val page = runCatching { repository.channelTab(channel.serviceId, tab) }
+                    .getOrElse { return@runBlocking fail("onglet $name illisible : $it") }
+                page.errors.forEach { Log.e("  erreur partielle de l'onglet $name", it) }
+                total += page.relatedItems.size
+                Log.i("  onglet $name : ${page.relatedItems.size} éléments, " +
+                    "suite ${page.hasNextPage()} · ${page.relatedItems.firstOrNull()?.name}")
+                if (page.hasNextPage()) {
+                    val more = runCatching { repository.moreChannelTabItems(channel.serviceId, tab, page.nextPage) }
+                        .getOrElse { return@runBlocking fail("page 2 de l'onglet $name illisible : $it") }
+                    Log.i("    page 2 : ${more.items.size} éléments")
+                    if (more.items.isEmpty()) return@runBlocking fail("page 2 de l'onglet $name vide")
+                }
+            }
+            if (total == 0) return@runBlocking fail("aucun contenu dans les onglets de la chaîne")
+        }
+
         val source = StreamSelector.select(info, graph.settings.maxResolution)
             ?: return@runBlocking fail("aucun flux lisible")
         Log.i("  choisi : ${source.label}")

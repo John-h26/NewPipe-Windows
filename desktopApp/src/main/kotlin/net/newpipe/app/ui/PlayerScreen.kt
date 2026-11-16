@@ -198,12 +198,20 @@ private fun Details(graph: AppGraph, info: StreamInfo) {
         Text(info.name, style = MaterialTheme.typography.headlineSmall)
     }
     Spacer(Modifier.height(6.dp))
+    val uploaderUrl = info.uploaderUrl?.takeIf { it.isNotBlank() }
     Text(
         listOfNotNull(
             info.uploaderName,
-            Formatting.count(info.uploaderSubscriberCount, language)?.let { "$it abonnés" }
+            Formatting.abbreviatedCount(info.uploaderSubscriberCount, language, info.serviceId)
+                ?.let { "$it abonnés" }
         ).joinToString(" · "),
-        style = MaterialTheme.typography.titleSmall
+        style = MaterialTheme.typography.titleSmall,
+        color = if (uploaderUrl != null) MaterialTheme.colorScheme.primary else Color.Unspecified,
+        modifier = if (uploaderUrl != null) {
+            Modifier.clickable { graph.openChannel(uploaderUrl, info.uploaderName) }
+        } else {
+            Modifier
+        }
     )
     Text(
         listOfNotNull(

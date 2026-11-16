@@ -130,13 +130,17 @@ private fun ServicePicker(graph: AppGraph) {
     }
 }
 
+/**
+ * Ligne d'une liste de résultats (recherche ou onglet de chaîne). [channelName] sert de nom de
+ * chaîne aux vidéos d'une page chaîne, que le service ne répète pas sur chaque élément.
+ */
 @Composable
-private fun ResultRow(graph: AppGraph, item: InfoItem, language: String) {
+fun ResultRow(graph: AppGraph, item: InfoItem, language: String, channelName: String? = null) {
     val uriHandler = LocalUriHandler.current
     when (item) {
         is StreamInfoItem -> Row(
             Modifier.fillMaxWidth()
-                .clickable { graph.playNow(graph.queue.itemFrom(item)) }
+                .clickable { graph.playNow(graph.queue.itemFrom(item, channelName)) }
                 .padding(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -150,30 +154,63 @@ private fun ResultRow(graph: AppGraph, item: InfoItem, language: String) {
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    listOfNotNull(
-                        item.uploaderName,
-                        Formatting.count(item.viewCount, language)?.let { "$it vues" },
-                        Formatting.itemDate(item, language)
-                    ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                val uploader = item.uploaderName?.takeIf { it.isNotBlank() }
+                val uploaderUrl = item.uploaderUrl?.takeIf { it.isNotBlank() }
+                // Sur une page chaîne, YouTube ne donne les vues qu'en abrégé
+                val views = if (channelName != null) {
+                    Formatting.abbreviatedCount(item.viewCount, language, item.serviceId)
+                } else {
+                    Formatting.count(item.viewCount, language)
+                }
+                val details = listOfNotNull(
+                    views?.let { "$it vues" },
+                    Formatting.itemDate(item, language)
+                ).joinToString(" · ")
+                Row {
+                    if (uploader != null) {
+                        // Le nom de la chaîne ouvre sa page ; le reste de la ligne lance la vidéo
+                        Text(
+                            uploader,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (uploaderUrl != null) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false).then(
+                                if (uploaderUrl != null) {
+                                    Modifier.clickable { graph.openChannel(uploaderUrl, uploader) }
+                                } else {
+                                    Modifier
+                                }
+                            )
+                        )
+                    }
+                    Text(
+                        if (uploader != null && details.isNotEmpty()) " · $details" else details,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
             }
-            TextButton(onClick = { graph.queue.enqueue(graph.queue.itemFrom(item)) }) {
+            TextButton(onClick = { graph.queue.enqueue(graph.queue.itemFrom(item, channelName)) }) {
                 Text("+ File")
             }
         }
 
-        // Les pages chaîne et playlist arrivent en v0.4 : ouverture dans le navigateur
         is ChannelInfoItem -> OtherRow(
             item,
-            "Chaîne · " + listOfNotNull(
-                Formatting.count(item.subscriberCount, language)?.let { "$it abonnés" },
-                "ouvrir dans le navigateur"
+            listOfNotNull(
+                "Chaîne",
+                Formatting.abbreviatedCount(item.subscriberCount, language, item.serviceId)
+                    ?.let { "$it abonnés" }
             ).joinToString(" · ")
-        ) { uriHandler.openUri(item.url) }
+        ) { graph.openChannel(item.url, item.name) }
 
+        // Les pages playlist ne sont pas encore intégrées : ouverture dans le navigateur
         is PlaylistInfoItem -> OtherRow(
             item,
             "Playlist · ${item.streamCount.takeIf { it >= 0 }?.let { "$it vidéos · " } ?: ""}" +

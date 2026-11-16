@@ -64,8 +64,14 @@ Chaque point a été vérifié par exécution (`--selftest`, `--snapshot`, exe p
 
 ## 5. Limites connues
 
-- **Abonnés faux en français** : l'extracteur renvoie 135 pour « 135 k abonnés » avec la
-  localisation fr-FR (valeur brute vérifiée). Bug de NewPipeExtractor, à signaler.
+- **Compteurs abrégés de YouTube faux hors anglais** : l'extracteur renvoie 135 pour
+  « 135 k abonnés » avec la localisation fr-FR (`Utils.mixedNumberWordToLong` ne reconnaît que
+  « 135K »). Même défaut pour les vues des onglets de chaîne. Bug de NewPipeExtractor, à
+  signaler. En attendant, ces compteurs sont masqués pour YouTube quand la langue n'est pas
+  l'anglais (`Formatting.abbreviatedCount`).
+- **Gel intermittent au démarrage de la lecture YouTube** (16/11/2026) : 2 autotests sur une
+  vingtaine sont restés en BUFFERING pendant 20 s (VLC : « Stream buffering done (3966 ms in
+  19458 ms) »). Non reproduit ensuite, cause non identifiée.
 - Certains titres SoundCloud n'ont aucun flux (`StreamExtractException`) : limite du service.
 - Messages `h264 … get_buffer() failed` à l'arrêt de la lecture : sans conséquence.
 - MSI non signé : SmartScreen avertira à l'installation.
@@ -79,7 +85,8 @@ Chaque point a été vérifié par exécution (`--selftest`, `--snapshot`, exe p
 
 | Fonction | État v0.3 | Charge estimée |
 |---|---|---|
-| Pages chaîne et playlist | Ouverture dans le navigateur | 2–3 j |
+| Pages chaîne | Faites le 16/11/2026 (`ChannelScreen`) ; les playlists d'une chaîne s'ouvrent encore dans le navigateur | — |
+| Pages playlist | Ouverture dans le navigateur | 1–2 j |
 | Téléchargement vidéo HD (DASH vidéo + audio) | Absent : demande un muxeur (VLC `sout` ou portage de `Mp4FromDashWriter`) | 2–3 j |
 | Abonnements, flux, historique (base locale) | Absent | 5–8 j |
 | Import Takeout et sauvegarde NewPipe Android | Absent (chemins FR **et** EN, voir doc 02) | 2–3 j |

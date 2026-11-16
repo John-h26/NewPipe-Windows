@@ -17,6 +17,7 @@ import java.time.format.FormatStyle
 import java.util.Locale
 import org.jsoup.Jsoup
 import org.schabi.newpipe.extractor.Image
+import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.Description
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 
@@ -90,6 +91,17 @@ object Formatting {
         return NumberFormat.getCompactNumberInstance(
             Locale.forLanguageTag(language), NumberFormat.Style.SHORT
         ).format(value)
+    }
+
+    /**
+     * Compteur que YouTube ne donne qu'en abrégé (abonnés, vues des pages chaîne). L'extracteur
+     * ne sait lire ces abréviations qu'en anglais : « 138 k abonnés » devient 138. Hors anglais,
+     * mieux vaut ne rien afficher qu'une valeur mille fois trop petite.
+     */
+    fun abbreviatedCount(value: Long, language: String, serviceId: Int): String? {
+        val unreliable = serviceId == ServiceList.YouTube.serviceId &&
+            Locale.forLanguageTag(language).language != "en"
+        return if (unreliable) null else count(value, language)
     }
 
     fun duration(seconds: Long): String {

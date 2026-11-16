@@ -37,11 +37,12 @@ class PlayQueue {
 
     private val currentIndex: Int get() = items.indexOfFirst { it.id == currentId }
 
-    fun itemFrom(info: StreamInfoItem) = QueueItem(
+    /** [fallbackUploader] : nom de la chaîne quand l'élément ne le porte pas (page chaîne) */
+    fun itemFrom(info: StreamInfoItem, fallbackUploader: String? = null) = QueueItem(
         id = nextId.getAndIncrement(),
         url = info.url,
         title = info.name,
-        uploader = info.uploaderName.orEmpty(),
+        uploader = info.uploaderName?.takeIf { it.isNotBlank() } ?: fallbackUploader.orEmpty(),
         thumbnailUrl = Formatting.thumbnail(info.thumbnails),
         durationSeconds = info.duration
     )

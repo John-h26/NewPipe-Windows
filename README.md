@@ -11,6 +11,8 @@ accompagné de son code source).
 ## Fonctions de la v0.3
 
 - Recherche sur les 5 services, avec pagination ; langue et pays envoyés aux services
+- Pages chaîne intégrées (onglets vidéos, shorts, directs, playlists… avec pagination), ouvertes
+  depuis un résultat de recherche ou le nom de la chaîne d'une vidéo
 - Lecture jusqu'en 4K (vidéo + audio séparés pour YouTube), saut, volume mémorisé, plein écran
 - File de lecture (ajout, ordre, retrait), enchaînement automatique, colonne « À suivre »
 - Téléchargement des vidéos avec son et des pistes audio, progression en direct
@@ -20,6 +22,18 @@ accompagné de son code source).
 Raccourcis (écran Lecture, inactifs pendant une saisie) : `Espace`/`K` lecture-pause,
 `←`/`J` et `→`/`L` ±10 s, `M` muet, `F` plein écran, `Échap` quitter le plein écran,
 `N` suivante, `P` précédente. Double-clic sur la vidéo : plein écran.
+
+## Installer
+
+Dans PowerShell (sans droits administrateur) :
+
+```powershell
+irm https://raw.githubusercontent.com/John-h26/NewPipe-Windows/main/install.ps1 | iex
+```
+
+Le script télécharge la dernière version publiée (`NewPipe-Windows-win64.zip`, Java et VLC
+inclus), vérifie son empreinte SHA-256, l'installe dans `%LOCALAPPDATA%\Programs\NewPipe Windows`
+et crée un raccourci dans le menu Démarrer. Le relancer met à jour l'application.
 
 ## Construire et lancer
 
@@ -54,10 +68,11 @@ La CI GitHub (`.github/workflows/build.yml`) construit le MSI à chaque push.
 ### Vérifications sans interface
 
 ```bat
-rem Recherche, détails, 25 s de lecture avec saut au milieu (service 0 = YouTube, 1 = SoundCloud, 3 = PeerTube)
+rem Recherche, détails, page chaîne (tous les onglets), 25 s de lecture avec saut au milieu
+rem (service 0 = YouTube, 1 = SoundCloud, 3 = PeerTube)
 gradlew.bat :desktopApp:run --args="--selftest it-connect 25 0"
 
-rem Captures PNG de chaque écran pendant un scénario réel
+rem Captures PNG de chaque écran pendant un scénario réel (dans desktopApp\build\snapshots)
 gradlew.bat :desktopApp:run --args="--snapshot it-connect build\snapshots"
 ```
 
